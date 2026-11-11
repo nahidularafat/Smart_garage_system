@@ -1,0 +1,64 @@
+name: car_track
+description: Smart Garage mobile controller for an ESP8266 garage system.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.7.2 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # UI
+  cupertino_icons: ^1.0.8
+  provider: ^6.1.5
+
+  # Firebase
+  firebase_core: ^3.15.0
+  cloud_firestore: ^5.6.8
+  firebase_auth: ^5.6.1
+
+  # State management & navigation
+  get: ^4.6.6
+
+  # Maps & Location
+  google_maps_flutter: ^2.6.0
+  location: ^8.0.0
+  geolocator: ^9.0.2
+
+  # URL Launcher
+  url_launcher: ^6.1.11
+
+  # HTTP requests
+  http: ^1.2.0
+
+  # ✅ নোটিফিকেশন এবং লোকাল স্টোরেজের জন্য এই প্যাকেজগুলো যোগ করা হয়েছে
+  firebase_messaging: ^15.0.0
+  shared_preferences: ^2.2.3
+
+  # ESP32-CAM in-app viewer
+  webview_flutter: ^4.10.0
+
+  # Firebase Realtime Database
+  firebase_database: ^11.3.4
+
+  # Image picker for plate detection
+  image_picker: ^1.1.2
+
+  # Date formatting
+  intl: ^0.19.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+
+  # ✅ assets সেকশনটি এভাবে লিখতে হবে
+  assets:
+    - assets/images/
