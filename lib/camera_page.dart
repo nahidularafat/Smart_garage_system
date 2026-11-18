@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'services/garage_auth_service.dart';
 
 class CameraPage extends StatefulWidget {
   final String cameraUrl;
@@ -35,6 +36,10 @@ class _CameraPageState extends State<CameraPage> {
   @override
   void initState() {
     super.initState();
+
+    // ── Security Guard: Block non-admin users whose vehicle is not inside ──
+    // Check is deferred to build() so we can use Navigator to pop if denied.
+
     _url = CameraPage.cleanUrl(widget.cameraUrl);
 
     _controller = WebViewController()
@@ -172,6 +177,71 @@ class _CameraPageState extends State<CameraPage> {
 
   @override
   Widget build(BuildContext context) {
+    // ── Security Guard: If a customer navigates here directly while vehicle is OUT,
+    //    block access and show a denial screen instead of the live feed. ──
+    // Admin users bypass this check entirely.
+    if (!GarageAuthService.isActualAdmin) {
+      return StreamBuilder<bool>(
+        stream: GarageAuthService.cameraAccessStream(),
+        builder: (context, snapshot) {
+          final hasAccess = snapshot.data ?? false;
+          if (!hasAccess) {
+            return Scaffold(
+              backgroundColor: const Color(0xFF0A0A1A),
+              appBar: AppBar(
+                backgroundColor: const Color(0xFF1A1A35),
+                foregroundColor: Colors.white,
+                title: const Text('Camera Access Denied', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+              ),
+              body: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFD32A).withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.lock_rounded, color: Color(0xFFFFD32A), size: 48),
+                      ),
+                      const SizedBox(height: 20),
+                      const Text(
+                        '🔒 Access Denied',
+                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Camera feed is only accessible while your vehicle is parked inside the garage.\n\nSwipe your RFID card at the entry gate to unlock.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: Color(0xFF8A8AB0), fontSize: 13, height: 1.5),
+                      ),
+                      const SizedBox(height: 24),
+                      FilledButton.icon(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.arrow_back_rounded, color: Colors.black),
+                        label: const Text('Go Back', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+                        style: FilledButton.styleFrom(backgroundColor: const Color(0xFF00E5CC)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          }
+          // Access granted — render normal camera
+          return _buildCameraView();
+        },
+      );
+    }
+
+    // Admin — always has access
+    return _buildCameraView();
+  }
+
+  Widget _buildCameraView() {
     return Scaffold(
       backgroundColor: const Color(0xFF0A0A1A),
       appBar: AppBar(

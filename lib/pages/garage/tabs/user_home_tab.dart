@@ -206,11 +206,19 @@ class _UserHomeTabState extends State<UserHomeTab> with SingleTickerProviderStat
                   const SizedBox(width: 8),
                   const Text('My Smart Parking', style: TextStyle(color: _kText, fontWeight: FontWeight.bold)),
                   const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.videocam_rounded, color: _kRed, size: 22),
-                    tooltip: 'Watch Live Camera',
-                    onPressed: () => Get.to(() => CameraPage(cameraUrl: _camUrl), transition: Transition.downToUp),
-                  ),
+                  // Camera icon — only visible when camera access is granted
+                  if (GarageAuthService.hasCameraAccess(_myCard))
+                    IconButton(
+                      icon: const Icon(Icons.videocam_rounded, color: _kRed, size: 22),
+                      tooltip: 'Watch Live Camera',
+                      onPressed: () => Get.to(() => CameraPage(cameraUrl: _camUrl), transition: Transition.downToUp),
+                    )
+                  else
+                    IconButton(
+                      icon: Icon(Icons.videocam_off_rounded, color: _kSub.withValues(alpha: 0.5), size: 22),
+                      tooltip: 'Camera locked — vehicle not inside',
+                      onPressed: () => _snack('🔒 Camera access only available while your vehicle is parked inside', _kYellow),
+                    ),
                   AnimatedBuilder(
                     animation: _pulse,
                     builder: (_, __) => Container(
@@ -292,7 +300,11 @@ class _UserHomeTabState extends State<UserHomeTab> with SingleTickerProviderStat
                   const SizedBox(height: 16),
 
                   // ── Live Security & Vehicle Camera (ESP32-CAM) ──
-                  _buildLiveCameraCard(),
+                  // Only show full camera card when access is granted; show locked card otherwise
+                  if (GarageAuthService.hasCameraAccess(_myCard))
+                    _buildLiveCameraCard()
+                  else
+                    _buildLockedCameraCard(),
 
                   const SizedBox(height: 24),
                 ]),
@@ -469,29 +481,51 @@ class _UserHomeTabState extends State<UserHomeTab> with SingleTickerProviderStat
               ),
             ),
             const SizedBox(height: 8),
-            InkWell(
-              onTap: () => Get.to(() => CameraPage(cameraUrl: _camUrl), transition: Transition.downToUp),
-              borderRadius: BorderRadius.circular(10),
-              child: Container(
+            // Camera shortcut — only when vehicle is parked inside (security policy)
+            if (card.isInside)
+              InkWell(
+                onTap: () => Get.to(() => CameraPage(cameraUrl: _camUrl), transition: Transition.downToUp),
+                borderRadius: BorderRadius.circular(10),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                  decoration: BoxDecoration(
+                    color: _kRed.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: _kRed.withValues(alpha: 0.35)),
+                  ),
+                  child: const Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.videocam_rounded, color: _kRed, size: 16),
+                      SizedBox(width: 6),
+                      Text(
+                        'Check My Parked Vehicle on Camera',
+                        style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Container(
                 padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                 decoration: BoxDecoration(
-                  color: _kRed.withValues(alpha: 0.15),
+                  color: _kSub.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: _kRed.withValues(alpha: 0.35)),
+                  border: Border.all(color: _kSub.withValues(alpha: 0.15)),
                 ),
-                child: const Row(
+                child: Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.videocam_rounded, color: _kRed, size: 16),
-                    SizedBox(width: 6),
+                    Icon(Icons.lock_outline_rounded, color: _kSub.withValues(alpha: 0.5), size: 14),
+                    const SizedBox(width: 6),
                     Text(
-                      'Check My Parked Vehicle on Camera',
-                      style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                      'Camera activates when vehicle enters garage',
+                      style: TextStyle(color: _kSub.withValues(alpha: 0.6), fontSize: 11),
                     ),
                   ],
                 ),
               ),
-            ),
           ],
 
           const SizedBox(height: 20),
@@ -788,6 +822,87 @@ class _UserHomeTabState extends State<UserHomeTab> with SingleTickerProviderStat
             child: const Text('Save'),
           ),
         ],
+      ),
+    );
+  }
+
+  /// 🔒 Locked Camera Card — shown on Home when vehicle is not inside (security policy)
+  Widget _buildLockedCameraCard() {
+    return Container(
+      decoration: BoxDecoration(
+        color: _kCard,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kSub.withValues(alpha: 0.2)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _kSub.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _kSub.withValues(alpha: 0.2)),
+                  ),
+                  child: Icon(Icons.videocam_off_rounded, color: _kSub.withValues(alpha: 0.5), size: 24),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.lock_rounded, color: _kYellow.withValues(alpha: 0.8), size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            'CAMERA ACCESS LOCKED',
+                            style: TextStyle(
+                              color: _kYellow.withValues(alpha: 0.8),
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Security Policy',
+                        style: TextStyle(color: _kSub.withValues(alpha: 0.7), fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: _kSurface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: _kYellow.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline_rounded, color: _kYellow.withValues(alpha: 0.6), size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Camera feed activates automatically when you swipe your RFID card at the entry gate.',
+                      style: TextStyle(color: _kSub.withValues(alpha: 0.8), fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

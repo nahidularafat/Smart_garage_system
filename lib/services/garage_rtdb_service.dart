@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_database/firebase_database.dart';
+import '../config/secrets.dart';
 import '../models/garage_user.dart';
 import '../models/garage_transaction.dart';
 
@@ -30,10 +31,8 @@ class SlotStatus {
 }
 
 class GarageRtdbService {
-  static const String databaseUrl =
-      'https://live-tracking-2fb1c-default-rtdb.firebaseio.com';
-  static const String dbSecret =
-      'pFhLbvWkUMgkx0zZByHtBEi5HR1SEDzDfOHMYUqR';
+  static const String databaseUrl = AppSecrets.databaseUrl;
+  static const String dbSecret = AppSecrets.dbSecret;
 
   static final FirebaseDatabase _db = FirebaseDatabase.instanceFor(
     app: Firebase.app(),

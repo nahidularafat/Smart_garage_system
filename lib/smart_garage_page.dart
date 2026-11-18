@@ -37,6 +37,10 @@ class _SmartGaragePageState extends State<SmartGaragePage> {
   StreamSubscription<List<GarageUser>>? _txSub;
   final Map<String, String> _prevStatus = {};
 
+  // Real-time camera access state for dynamic navigation bar updates
+  StreamSubscription<bool>? _camAccessSub;
+  bool _hasCameraAccess = false;
+
   static const _adminTabs = [
     DashboardTab(),
     CardsTab(),
@@ -71,6 +75,13 @@ class _SmartGaragePageState extends State<SmartGaragePage> {
     GarageAuthService.init();
     GarageAuthService.previewAsUser.addListener(_onRoleChanged);
     _startTransactionLogger();
+    _camAccessSub = GarageAuthService.cameraAccessStream().listen((hasAccess) {
+      if (mounted && _hasCameraAccess != hasAccess) {
+        setState(() {
+          _hasCameraAccess = hasAccess;
+        });
+      }
+    });
   }
 
   void _onRoleChanged() {
@@ -85,6 +96,7 @@ class _SmartGaragePageState extends State<SmartGaragePage> {
   void dispose() {
     GarageAuthService.previewAsUser.removeListener(_onRoleChanged);
     _txSub?.cancel();
+    _camAccessSub?.cancel();
     super.dispose();
   }
 
@@ -127,7 +139,18 @@ class _SmartGaragePageState extends State<SmartGaragePage> {
     final isAdmin = GarageAuthService.isAdmin;
     final isActualAdmin = GarageAuthService.isActualAdmin;
     final tabs = isAdmin ? _adminTabs : _userTabs;
-    final navItems = isAdmin ? _adminNavItems : _userNavItems;
+
+    final effectiveAccess = isAdmin || _hasCameraAccess;
+    final userNavItems = [
+      (icon: Icons.directions_car_rounded, label: 'My Vehicle'),
+      (
+        icon: effectiveAccess ? Icons.videocam_rounded : Icons.lock_outline_rounded,
+        label: effectiveAccess ? 'Live Camera' : 'Camera (Locked)',
+      ),
+      (icon: Icons.receipt_long_rounded, label: 'History'),
+      (icon: Icons.person_rounded, label: 'Account'),
+    ];
+    final navItems = isAdmin ? _adminNavItems : userNavItems;
 
     // Guard tab index out of bounds when switching roles
     if (_tab >= tabs.length) {

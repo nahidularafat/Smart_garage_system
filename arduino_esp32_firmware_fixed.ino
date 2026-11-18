@@ -13,13 +13,23 @@
 #include <Adafruit_SSD1306.h>
 #include "time.h"
 
+// ─── Secrets & Credentials ─────────────────────────────────
+#if __has_include("arduino_secrets.h")
+  #include "arduino_secrets.h"
+#else
+  #define SECRET_WIFI_SSID      "YOUR_WIFI_SSID"
+  #define SECRET_WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
+  #define SECRET_DATABASE_URL   "your-project-default-rtdb.firebaseio.com"
+  #define SECRET_DB_SECRET      "YOUR_FIREBASE_DATABASE_SECRET"
+#endif
+
 // ─── WiFi ──────────────────────────────────────────────────
-const char* ssid     = "TP-Link_5548";
-const char* password = "70299519";
+const char* ssid     = SECRET_WIFI_SSID;
+const char* password = SECRET_WIFI_PASSWORD;
 
 // ─── Firebase ──────────────────────────────────────────────
-#define DATABASE_URL "live-tracking-2fb1c-default-rtdb.firebaseio.com"
-#define DB_SECRET    "pFhLbvWkUMgkx0zZByHtBEi5HR1SEDzDfOHMYUqR"
+#define DATABASE_URL SECRET_DATABASE_URL
+#define DB_SECRET    SECRET_DB_SECRET
 
 // ─── NTP Server ────────────────────────────────────────────
 const char* ntpServer = "pool.ntp.org";

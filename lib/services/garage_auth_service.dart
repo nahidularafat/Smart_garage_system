@@ -113,6 +113,29 @@ class GarageAuthService {
     });
   }
 
+  /// Dynamic Camera Access Policy:
+  /// - Admin accounts have 24/7 camera access (unless testing under 'previewAsUser' mode).
+  /// - Customers have camera access ONLY when their card status is 'IN' (punched at entry gate).
+  ///   When punched at exit gate ('OUT') or if no card linked, access is revoked for privacy/security.
+  static bool hasCameraAccess(GarageUser? card) {
+    if (isActualAdmin && !previewAsUser.value) return true;
+    return card != null && card.isInside;
+  }
+
+  /// Check if ANY of the user's cards is currently parked inside ('IN')
+  static bool hasAnyCardInside(List<GarageUser> cards) {
+    if (isActualAdmin && !previewAsUser.value) return true;
+    return cards.any((c) => c.isInside);
+  }
+
+  /// Real-time stream of camera access state for the active user
+  static Stream<bool> cameraAccessStream() {
+    if (isActualAdmin && !previewAsUser.value) {
+      return Stream.value(true);
+    }
+    return myCardsStream().map((cards) => cards.any((c) => c.isInside));
+  }
+
   /// Claim or link a card to current user account
   /// Returns a record with (success, message)
   static Future<({bool ok, String message})> claimCard(String rawUid) async {

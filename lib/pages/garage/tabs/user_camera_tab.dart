@@ -7,6 +7,7 @@ import 'package:webview_flutter/webview_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../models/garage_user.dart';
+import '../../../services/garage_auth_service.dart';
 import '../../../services/garage_rtdb_service.dart';
 import '../../../camera_page.dart';
 
@@ -38,6 +39,13 @@ class _UserCameraTabState extends State<UserCameraTab>
   StreamSubscription<SlotStatus>? _slotSub;
   SlotStatus _slots = const SlotStatus(slot1: 'Empty', slot2: 'Empty', slot3: 'Empty', slot4: 'Empty');
 
+  // ── Camera Access Control (Security Policy) ──
+  StreamSubscription<List<GarageUser>>? _cardSub;
+  GarageUser? _myCard;
+  bool _cameraAccessGranted = false;
+  bool _cardLoading = true;
+  bool _wasAccessGranted = false; // Track previous state for stream reload
+
   late final AnimationController _pulseCtrl;
   late final Animation<double> _pulse;
 
@@ -52,6 +60,25 @@ class _UserCameraTabState extends State<UserCameraTab>
 
     _slotSub = GarageRtdbService.slotsStream().listen((s) {
       if (mounted) setState(() => _slots = s);
+    });
+
+    // ── Listen to card status for real-time camera access control ──
+    _cardSub = GarageAuthService.myCardsStream().listen((cards) {
+      if (mounted) {
+        final card = cards.isNotEmpty ? cards.first : null;
+        final hasAccess = GarageAuthService.hasCameraAccess(card);
+        final justGainedAccess = hasAccess && !_wasAccessGranted && !_cardLoading;
+        setState(() {
+          _myCard = card;
+          _cameraAccessGranted = hasAccess;
+          _cardLoading = false;
+          _wasAccessGranted = hasAccess;
+        });
+        // Auto-reload stream when access is newly granted (card punched IN)
+        if (justGainedAccess) {
+          _reloadStream();
+        }
+      }
     });
 
     _controller = WebViewController()
@@ -179,6 +206,7 @@ class _UserCameraTabState extends State<UserCameraTab>
   @override
   void dispose() {
     _slotSub?.cancel();
+    _cardSub?.cancel();
     _pulseCtrl.dispose();
     super.dispose();
   }
@@ -187,6 +215,241 @@ class _UserCameraTabState extends State<UserCameraTab>
   Widget build(BuildContext context) {
     super.build(context);
 
+    // ── Loading card status ──
+    if (_cardLoading) {
+      return Scaffold(
+        backgroundColor: _kBg,
+        body: const Center(child: CircularProgressIndicator(color: _kAccent)),
+      );
+    }
+
+    // ── CAMERA ACCESS DENIED — Security Lock Screen ──
+    if (!_cameraAccessGranted) {
+      return _buildLockedScreen();
+    }
+
+    // ── CAMERA ACCESS GRANTED — Live Stream ──
+    return _buildLiveStreamScreen();
+  }
+
+  /// 🔒 Security Lock Screen — shown when customer's vehicle is not parked inside
+  Widget _buildLockedScreen() {
+    final hasCard = _myCard != null;
+    final cardStatus = hasCard ? _myCard!.status : 'N/A';
+
+    return Scaffold(
+      backgroundColor: _kBg,
+      appBar: AppBar(
+        backgroundColor: _kSurface,
+        title: Row(
+          children: [
+            Icon(Icons.lock_rounded, color: _kYellow, size: 20),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Camera Access Restricted',
+                  style: TextStyle(color: _kText, fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  'Security Policy Active',
+                  style: TextStyle(color: _kYellow.withValues(alpha: 0.8), fontSize: 11),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+      body: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Animated Lock Icon with Shield
+              AnimatedBuilder(
+                animation: _pulse,
+                builder: (_, __) => Container(
+                  width: 120,
+                  height: 120,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        _kYellow.withValues(alpha: 0.15 * _pulse.value),
+                        _kYellow.withValues(alpha: 0.05),
+                        Colors.transparent,
+                      ],
+                    ),
+                    border: Border.all(
+                      color: _kYellow.withValues(alpha: 0.3 * _pulse.value),
+                      width: 2,
+                    ),
+                  ),
+                  child: Center(
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Icon(Icons.shield_rounded, color: _kYellow.withValues(alpha: 0.3), size: 60),
+                        Icon(Icons.lock_rounded, color: _kYellow.withValues(alpha: _pulse.value), size: 36),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
+
+              // Title
+              const Text(
+                '🔒 Camera Access Locked',
+                style: TextStyle(
+                  color: _kText,
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              // Explanation
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _kCard,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: _kYellow.withValues(alpha: 0.2)),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      hasCard
+                          ? 'Your vehicle is currently OUTSIDE the garage.\n\nCamera feed is only accessible while your vehicle is parked inside for security reasons.'
+                          : 'No RFID card linked to your account.\n\nLink your parking card first, then swipe at the entry gate to unlock camera access.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: _kSub.withValues(alpha: 0.9), fontSize: 14, height: 1.5),
+                    ),
+                    if (hasCard) ...[
+                      const SizedBox(height: 14),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: _kSurface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: _kRed.withValues(alpha: 0.3)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.credit_card_rounded, color: _kAccent, size: 16),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Card ${_myCard!.uid}',
+                              style: const TextStyle(color: _kText, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1),
+                            ),
+                            const SizedBox(width: 10),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: _kRed.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                'STATUS: $cardStatus',
+                                style: const TextStyle(color: _kRed, fontSize: 10, fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // How to unlock steps
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: _kSurface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: _kAccent.withValues(alpha: 0.15)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.info_outline_rounded, color: _kAccent, size: 16),
+                        const SizedBox(width: 8),
+                        Text(
+                          'HOW TO UNLOCK CAMERA',
+                          style: TextStyle(
+                            color: _kAccent.withValues(alpha: 0.8),
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    _buildStep('1', 'Swipe your RFID card at the entry gate', Icons.contactless_rounded),
+                    const SizedBox(height: 8),
+                    _buildStep('2', 'Park your vehicle inside the garage', Icons.local_parking_rounded),
+                    const SizedBox(height: 8),
+                    _buildStep('3', 'Camera feed activates automatically!', Icons.videocam_rounded),
+                    const SizedBox(height: 10),
+                    Divider(color: _kSub.withValues(alpha: 0.2)),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.security_rounded, color: _kYellow.withValues(alpha: 0.7), size: 14),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Camera access is revoked automatically when you swipe to exit.',
+                            style: TextStyle(color: _kSub.withValues(alpha: 0.7), fontSize: 11, fontStyle: FontStyle.italic),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStep(String num, String text, IconData icon) {
+    return Row(
+      children: [
+        Container(
+          width: 24,
+          height: 24,
+          decoration: BoxDecoration(
+            color: _kAccent.withValues(alpha: 0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Center(
+            child: Text(num, style: const TextStyle(color: _kAccent, fontSize: 12, fontWeight: FontWeight.bold)),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Icon(icon, color: _kAccent.withValues(alpha: 0.6), size: 16),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(text, style: TextStyle(color: _kSub.withValues(alpha: 0.9), fontSize: 12)),
+        ),
+      ],
+    );
+  }
+
+  /// ✅ Live Camera Stream — shown when card is punched IN (access granted)
+  Widget _buildLiveStreamScreen() {
     return Scaffold(
       backgroundColor: _kBg,
       appBar: AppBar(

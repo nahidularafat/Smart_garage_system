@@ -13,9 +13,17 @@
 #include "soc/rtc_cntl_reg.h"
 #include "esp_http_server.h"
 
-// ─── WiFi Credentials (আপনার রাউটারের সাথে মিল রাখা হয়েছে) ────
-const char* ssid     = "TP-Link_5548";
-const char* password = "70299519";
+// ─── Secrets & Credentials ─────────────────────────────────
+#if __has_include("arduino_secrets.h")
+  #include "arduino_secrets.h"
+#else
+  #define SECRET_WIFI_SSID      "YOUR_WIFI_SSID"
+  #define SECRET_WIFI_PASSWORD  "YOUR_WIFI_PASSWORD"
+#endif
+
+// ─── WiFi Credentials ──────────────────────────────────────────
+const char* ssid     = SECRET_WIFI_SSID;
+const char* password = SECRET_WIFI_PASSWORD;
 
 // ─── Static IP Configuration (192.168.0.250) ──────────────────
 IPAddress local_IP(192, 168, 0, 250);
